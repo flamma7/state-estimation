@@ -11,8 +11,13 @@ Run linear least squares on it, and see what we get
 # get random number and print
 # get a vector of 50 random samples of the number
 # run least squares on it and see how close we get
+num_meas = 1000
 
-rand_num = np.random.randint(0,100)
-print rand_num
+rand_const = np.random.randint(0,100)
+print rand_const
 
-print np.random.normal(rand_num, 10, size=50)
+measurements = np.random.normal(rand_const, 10, size=(num_meas,1))
+ones = np.ones((num_meas, 1))
+hl = np.linalg.pinv(ones)
+estimate = np.dot(hl, measurements)
+print estimate
