@@ -18,8 +18,8 @@ good_sigma = 2
 rand_const = np.random.randint(0,100)
 print rand_const
 
-# num_bad_meas = int(num_meas_total / 2)
-num_bad_meas = num_meas_total -1 # almost all bad measurements
+num_bad_meas = int(num_meas_total / 2)
+# num_bad_meas = num_meas_total -1 # almost all bad measurements
 num_good_meas = num_meas_total - num_bad_meas
 bad_measurements = np.random.normal(rand_const, bad_sigma, size=(num_bad_meas,1))
 # print(bad_measurements)
