@@ -1,0 +1,17 @@
+kalman:
+  odom:
+    initial_position:
+      x: 5
+      y: 0
+      z: 0
+    twist:
+      x: 0
+      y: 0
+      z: 0
+  measurements:
+    x_sigma: 0.5
+    y_sigma: 0.0
+    z_sigma: 0.0
+    x_noise_type: "normal" # normal or uniform
+    y_noise_type: "normal"
+    z_noise_type: "normal"
