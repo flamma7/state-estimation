@@ -99,8 +99,9 @@ class PointSim:
         else:
             rospy.loginfo_once("Uniform Error on X")
             sigma = rospy.get_param("kalman/measurements/x_sigma")
-            low = self.auvs[auv][ODOM_INDEX].pose.pose.position.x - 3*sigma
-            high = self.auvs[auv][ODOM_INDEX].pose.pose.position.x + 3*sigma
+            dist_range = np.sqrt(12) * sigma
+            low = self.auvs[auv][ODOM_INDEX].pose.pose.position.x - dist_range / 2
+            high = self.auvs[auv][ODOM_INDEX].pose.pose.position.x + dist_range / 2
             pwc.pose.position.x = np.random.uniform(low, high)
             pwc.covariance[0] = sigma ** 2
         
@@ -113,8 +114,9 @@ class PointSim:
         else:
             rospy.loginfo_once("Uniform Error on Y")
             sigma = rospy.get_param("kalman/measurements/y_sigma")
-            low = self.auvs[auv][ODOM_INDEX].pose.pose.position.y - 3*sigma
-            high = self.auvs[auv][ODOM_INDEX].pose.pose.position.y + 3*sigma
+            dist_range = np.sqrt(12) * sigma
+            low = self.auvs[auv][ODOM_INDEX].pose.pose.position.x - dist_range / 2
+            high = self.auvs[auv][ODOM_INDEX].pose.pose.position.x + dist_range / 2
             pwc.pose.position.y = np.random.uniform(low, high)
             pwc.covariance[7] = sigma ** 2
 
@@ -127,8 +129,9 @@ class PointSim:
         else:
             rospy.loginfo_once("Uniform Error on Z")
             sigma = rospy.get_param("kalman/measurements/z_sigma")
-            low = self.auvs[auv][ODOM_INDEX].pose.pose.position.z - 3*sigma
-            high = self.auvs[auv][ODOM_INDEX].pose.pose.position.z + 3*sigma
+            dist_range = np.sqrt(12) * sigma
+            low = self.auvs[auv][ODOM_INDEX].pose.pose.position.x - dist_range / 2
+            high = self.auvs[auv][ODOM_INDEX].pose.pose.position.x + dist_range / 2
             pwc.pose.position.z = np.random.uniform(low, high)
             pwc.covariance[14] = sigma ** 2
         pwc.pose.orientation = self.auvs[auv][ODOM_INDEX].pose.pose.orientation
