@@ -6,7 +6,7 @@ Simulates the movements of points in space
 import rospy
 import numpy as np
 from nav_msgs.msg import Odometry
-from geometry_msgs.msg import Point, Pose, TwistStamped, Twist, PoseWithCovariance
+from geometry_msgs.msg import Point, Pose, TwistStamped, Twist, PoseWithCovariance, PoseWithCovarianceStamped
 import random
 import tf
 
@@ -19,8 +19,11 @@ class PointSim:
     def __init__(self):
         rospy.loginfo("Point Sim and Controller Initialized")
         self.load_vehicle()
-        self.update_period = 1 / 10
-        self.timer = rospy.Timer(rospy.Duration(self.update_period), self.update_poses)
+        self.update_period = 0.1
+        self.pose_timer = rospy.Timer(rospy.Duration(self.update_period), self.update_poses)
+        sensor_pub_period = 1 / rospy.get_param("kalman/measurements/update_rate")
+        self.sensor_timer = rospy.Timer(rospy.Duration(sensor_pub_period), self.publish_sensors)
+        self.seq = 0
 
     def load_vehicle(self):
         self.auvs = {} # each auv has an odom
@@ -39,7 +42,7 @@ class PointSim:
         t.linear.y = rospy.get_param("kalman/odom/twist/y")
         t.linear.z = rospy.get_param("kalman/odom/twist/z")
         self.auvs[auv][ODOM_INDEX].twist.twist = t
-        self.pose_sensor_pub = rospy.Publisher(auv + "/pose_measurement", PoseWithCovariance, queue_size=10)
+        self.pose_sensor_pub = rospy.Publisher(auv + "/pose_measurement", PoseWithCovarianceStamped, queue_size=10)
 
     def get_start_pose(self):
         pose = Pose()
@@ -84,11 +87,11 @@ class PointSim:
 
         self.auvs[auv][ODOM_INDEX] = odom
         self.auvs[auv][PUB_INDEX].publish(odom)
-        self.publish_sensors(auv)
 
-    def publish_sensors(self, auv):
+    def publish_sensors(self, msg):
         """ publishes noisy position values for each robot """
         pwc = PoseWithCovariance()
+        auv = "akon"
 
         # X Meas
         if rospy.get_param("kalman/measurements/x_noise_type") == "normal":
@@ -135,7 +138,14 @@ class PointSim:
             pwc.pose.position.z = np.random.uniform(low, high)
             pwc.covariance[14] = sigma ** 2
         pwc.pose.orientation = self.auvs[auv][ODOM_INDEX].pose.pose.orientation
-        self.pose_sensor_pub.publish(pwc)
+        pwcs = PoseWithCovarianceStamped()
+        pwcs.header.seq = self.seq
+        pwcs.header.stamp = rospy.Time.now()
+        pwcs.header.frame_id = "base_link"
+        pwcs.pose = pwc
+        self.pose_sensor_pub.publish(pwcs)
+
+        self.seq += 1
 
     def correct_angles(self, angle):
         """ Map all angles between -pi to pi """
