@@ -59,10 +59,8 @@ class Kalman:
         else:
             self.x_posteriori = x_apriori
             self.P_posteriori = P_apriori
-            print("P+:")
-            print(self.P_posteriori)
-            print("x+")
-            print(self.x_posteriori)
+            print("x+: " + str(self.x_posteriori) + "\nP+: \n" + str(self.P_posteriori))
+            
             
 
     def meas_callback(self, msg):
@@ -71,13 +69,13 @@ class Kalman:
         self.lock.acquire(True)
         P_apriori, x_apriori = self.time_update(True) # Perform time update to synchronize the measurement update
         # Perform Meas Update
-        meas = msg.twist.twist.linear.x
-        meas_var = msg.twist.covariance[0]
+        meas = np.array([msg.pose.pose.position.x, msg.twist.twist.linear.x]).reshape((2,1))
+        meas_var = np.array([[msg.pose.covariance[0],0],[0,msg.twist.covariance[0]]])
         R = meas_var
 
         # Calculate K
-        H = np.array([0,1]).reshape((1,2))
-        tmp_k = 1 / (np.dot( np.dot(H, P_apriori), H.T) + R)
+        H = np.eye(2)
+        tmp_k = np.linalg.inv( np.dot( np.dot(H,P_apriori), H.T ) + R)
         K = np.dot( np.dot(P_apriori, H.T), tmp_k )
 
         innovation = meas - np.dot(H, x_apriori)
@@ -85,7 +83,7 @@ class Kalman:
         self.x_posteriori = x_apriori + np.dot(K, innovation)
         self.P_posteriori = np.dot( (np.eye(2) - np.dot(K,H)), P_apriori)
 
-        print("P+: " + str(self.P_posteriori) + "\nx+: \n" + str(self.x_posteriori))
+        print("x+: " + str(self.x_posteriori) + "\nP+: \n" + str(self.P_posteriori))
         self.lock.release()        
 
 if __name__ == "__main__":
