@@ -6,7 +6,7 @@ Simulates the movements of points in space
 import rospy
 import numpy as np
 from nav_msgs.msg import Odometry
-from geometry_msgs.msg import Point, Pose, TwistStamped, Twist, PoseWithCovariance, PoseWithCovarianceStamped, TwistWithCovariance
+from geometry_msgs.msg import Point, Pose, TwistStamped, Twist, PoseWithCovariance, PoseWithCovarianceStamped
 import random
 import tf
 
@@ -42,7 +42,7 @@ class PointSim:
         t.linear.y = rospy.get_param("kalman/odom/twist/y")
         t.linear.z = rospy.get_param("kalman/odom/twist/z")
         self.auvs[auv][ODOM_INDEX].twist.twist = t
-        self.odom_sensor_pub = rospy.Publisher(auv + "/odom_measurement", Odometry, queue_size=10)
+        self.pose_sensor_pub = rospy.Publisher(auv + "/pose_measurement", PoseWithCovarianceStamped, queue_size=10)
 
     def get_start_pose(self):
         pose = Pose()
@@ -91,46 +91,59 @@ class PointSim:
     def publish_sensors(self, msg):
         """ publishes noisy position values for each robot """
         pwc = PoseWithCovariance()
-        twc = TwistWithCovariance()
         auv = "akon"
 
         # X Meas
-        rospy.loginfo_once("Normal Error on X")
-        sigma = rospy.get_param("kalman/measurements/x_sigma")
-        dot_sigma = rospy.get_param("kalman/measurements/x_dot_sigma")
-        pwc.pose.position.x = np.random.normal( self.auvs[auv][ODOM_INDEX].pose.pose.position.x, sigma)
-        pwc.covariance[0] = sigma ** 2
-        twc.twist.linear.x = np.random.normal( self.auvs[auv][ODOM_INDEX].twist.twist.linear.x, dot_sigma)
-        twc.covariance[0] = dot_sigma ** 2
+        if rospy.get_param("kalman/measurements/x_noise_type") == "normal":
+            rospy.loginfo_once("Normal Error on X")
+            sigma = rospy.get_param("kalman/measurements/x_sigma")
+            pwc.pose.position.x = np.random.normal( self.auvs[auv][ODOM_INDEX].pose.pose.position.x, sigma)
+            pwc.covariance[0] = sigma ** 2
+        else:
+            rospy.loginfo_once("Uniform Error on X")
+            sigma = rospy.get_param("kalman/measurements/x_sigma")
+            dist_range = np.sqrt(12) * sigma
+            low = self.auvs[auv][ODOM_INDEX].pose.pose.position.x - dist_range / 2
+            high = self.auvs[auv][ODOM_INDEX].pose.pose.position.x + dist_range / 2
+            pwc.pose.position.x = np.random.uniform(low, high)
+            pwc.covariance[0] = sigma ** 2
         
         # Y Meas
-        rospy.loginfo_once("Normal Error on Y")
-        sigma = rospy.get_param("kalman/measurements/y_sigma")
-        dot_sigma = rospy.get_param("kalman/measurements/y_dot_sigma")
-        pwc.pose.position.y = np.random.normal( self.auvs[auv][ODOM_INDEX].pose.pose.position.y, sigma)
-        pwc.covariance[7] = sigma ** 2
-        twc.twist.linear.y = np.random.normal( self.auvs[auv][ODOM_INDEX].twist.twist.linear.y, dot_sigma)
-        twc.covariance[7] = dot_sigma ** 2
+        if rospy.get_param("kalman/measurements/y_noise_type") == "normal":
+            rospy.loginfo_once("Normal Error on Y")
+            sigma = rospy.get_param("kalman/measurements/y_sigma")
+            pwc.pose.position.y = np.random.normal( self.auvs[auv][ODOM_INDEX].pose.pose.position.y, sigma)
+            pwc.covariance[7] = sigma ** 2
+        else:
+            rospy.loginfo_once("Uniform Error on Y")
+            sigma = rospy.get_param("kalman/measurements/y_sigma")
+            dist_range = np.sqrt(12) * sigma
+            low = self.auvs[auv][ODOM_INDEX].pose.pose.position.x - dist_range / 2
+            high = self.auvs[auv][ODOM_INDEX].pose.pose.position.x + dist_range / 2
+            pwc.pose.position.y = np.random.uniform(low, high)
+            pwc.covariance[7] = sigma ** 2
 
         # Z Meas
-        rospy.loginfo_once("Normal Error on Z")
-        sigma = rospy.get_param("kalman/measurements/z_sigma")
-        dot_sigma = rospy.get_param("kalman/measurements/z_dot_sigma")
-        pwc.pose.position.z = np.random.normal( self.auvs[auv][ODOM_INDEX].pose.pose.position.z, sigma)
-        pwc.covariance[14] = sigma ** 2
-        twc.twist.linear.z = np.random.normal( self.auvs[auv][ODOM_INDEX].twist.twist.linear.z, dot_sigma)
-        twc.covariance[14] = dot_sigma ** 2
-
+        if rospy.get_param("kalman/measurements/z_noise_type") == "normal":
+            rospy.loginfo_once("Normal Error on Z")
+            sigma = rospy.get_param("kalman/measurements/z_sigma")
+            pwc.pose.position.z = np.random.normal( self.auvs[auv][ODOM_INDEX].pose.pose.position.z, sigma)
+            pwc.covariance[14] = sigma ** 2
+        else:
+            rospy.loginfo_once("Uniform Error on Z")
+            sigma = rospy.get_param("kalman/measurements/z_sigma")
+            dist_range = np.sqrt(12) * sigma
+            low = self.auvs[auv][ODOM_INDEX].pose.pose.position.x - dist_range / 2
+            high = self.auvs[auv][ODOM_INDEX].pose.pose.position.x + dist_range / 2
+            pwc.pose.position.z = np.random.uniform(low, high)
+            pwc.covariance[14] = sigma ** 2
         pwc.pose.orientation = self.auvs[auv][ODOM_INDEX].pose.pose.orientation
-
-        odom_msg = Odometry()
-        odom_msg.header.seq = self.seq
-        odom_msg.header.stamp = rospy.Time.now()
-        odom_msg.header.frame_id = "base_link"
-        odom_msg.child_frame_id = odom_msg.header.frame_id
-        odom_msg.pose = pwc
-        odom_msg.twist = twc
-        self.odom_sensor_pub.publish(odom_msg)
+        pwcs = PoseWithCovarianceStamped()
+        pwcs.header.seq = self.seq
+        pwcs.header.stamp = rospy.Time.now()
+        pwcs.header.frame_id = "base_link"
+        pwcs.pose = pwc
+        self.pose_sensor_pub.publish(pwcs)
 
         self.seq += 1
 
