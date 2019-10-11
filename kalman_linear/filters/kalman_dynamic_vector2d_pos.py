@@ -6,8 +6,7 @@ from geometry_msgs.msg import PoseWithCovarianceStamped
 import numpy as np
 from threading import Lock # locks can only be unlocked by their current thread
 """
-Tracks a single dimension position using velocity updates
-No input, assumes constant velocity
+Tracks a single dimension position using position updates
 
 The variable self.last_propagation_step is used for synchronization
 
@@ -22,7 +21,7 @@ time update at the current step. (so our time update could happen at more recent
 
 class Kalman:
     def __init__(self):
-        self.system_noise = np.array([0.25, 0.25]).reshape((2,1))
+        self.system_noise = np.array([0.01, 0.01]).reshape((2,1))
         # self.P_posteriori = 1 # low uncertainty
         self.P_posteriori = np.array([[1e3, 0], [0, 1e9]])
         self.x_posteriori = np.array([0,0.0]).reshape((2,1))
@@ -69,13 +68,13 @@ class Kalman:
         self.lock.acquire(True)
         P_apriori, x_apriori = self.time_update(True) # Perform time update to synchronize the measurement update
         # Perform Meas Update
-        meas = np.array([msg.pose.pose.position.x, msg.twist.twist.linear.x]).reshape((2,1))
-        meas_var = np.array([[msg.pose.covariance[0],0],[0,msg.twist.covariance[0]]])
+        meas = np.array([msg.pose.pose.position.x]).reshape((1,1))
+        meas_var = np.array([msg.pose.covariance[0]]).reshape((1,1))
         R = meas_var
 
         # Calculate K
-        H = np.eye(2)
-        tmp_k = np.linalg.inv( np.dot( np.dot(H,P_apriori), H.T ) + R)
+        H = np.array([1, 0]).reshape(1,2)
+        tmp_k = 1 / (np.dot( np.dot(H,P_apriori), H.T) + R)
         K = np.dot( np.dot(P_apriori, H.T), tmp_k )
 
         innovation = meas - np.dot(H, x_apriori)
