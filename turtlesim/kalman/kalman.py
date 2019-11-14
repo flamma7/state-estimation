@@ -57,6 +57,7 @@ class Kalman():
         p.x = self.estimate[0]
         p.y = self.estimate[1]
         self.pub.publish(p)
+        print(self.uncertainty)
 
     # def cmd_vel_callback(self, msg):
         # self.control_inpt = msg
