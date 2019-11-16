@@ -12,10 +12,10 @@ from std_msgs.msg import Float32MultiArray
 import threading
 
 # steps
-# test the locking stuff
 # test subscribing and queuing control inputs + measurements
 # implement the prediction stuff w/o measurements
 # implement correction step
+# implement nonlinearity with the wall -> sensor input of the actual speed
 
 THETA_INDEX = 2
 SPEED_INDEX = 3
@@ -23,9 +23,9 @@ THETA_DOT_INDEX = 4
 
 class EKF():
     def __init__(self):
-        # rospy.Subscriber("/turtle1/meas", Float32MultiArray, self.meas_callback)
-        # rospy.Subscriber("/turtle1/cmd_vel", Twist, self.control_callback)
-        # self.pub = rospy.Publisher("/turtle1/kf_estimate", Float32MultiArray, queue_size=10) # TODO maybe publish a covariance as well?
+        rospy.Subscriber("/turtle1/meas", Float32MultiArray, self.meas_callback)
+        rospy.Subscriber("/turtle1/cmd_vel", Twist, self.control_callback)
+        self.pub = rospy.Publisher("/turtle1/kf_estimate", Float32MultiArray, queue_size=10) # TODO maybe publish a covariance as well?
 
         # self.control_inpt = None
         # self.estimate = None
@@ -54,11 +54,17 @@ class EKF():
 
     def run_filter(self):
         self.lock.acquire(True)
-        print(self.lock.locked())
-        print("Acquired lock")
+        if not self.control_queue:
+            pass
+        else:
+            print("Emptying control queue")
+            self.control_queue = []
+        if not self.meas_queue:
+            pass
+        else:
+            print("Emptying meas queue")
+            self.meas_queue = []
         self.lock.release()
-        print("releasing lock")
-
         # Check if control input
         # if not self.control_queue: # no control input
         #     pass
