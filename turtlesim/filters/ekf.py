@@ -10,9 +10,9 @@ from geometry_msgs.msg import Twist
 import numpy as np
 from std_msgs.msg import Float32MultiArray
 import threading
+from scipy import integrate
 
 # steps
-# test subscribing and queuing control inputs + measurements
 # implement the prediction stuff w/o measurements
 # implement correction step
 # implement nonlinearity with the wall -> sensor input of the actual speed
@@ -23,14 +23,21 @@ THETA_DOT_INDEX = 4
 
 class EKF():
     def __init__(self):
+        self.lock = threading.Lock()
+        self.last_control_time = rospy.get_time()
+        self.control_queue = [0,0]
+        self.meas_queue = []
+        self.mean = np.array([[]])
+        self.sigma = np.array([[1, 0, 0],[0,1,0],[0,0,0.1]])
+        self.last_update_time = None
+
         rospy.Subscriber("/turtle1/meas", Float32MultiArray, self.meas_callback)
+        print("...waiting for first measurement")
+        rospy.wait_for_message("/turtle1/meas", Float32MultiArray)
         rospy.Subscriber("/turtle1/cmd_vel", Twist, self.control_callback)
         self.pub = rospy.Publisher("/turtle1/kf_estimate", Float32MultiArray, queue_size=10) # TODO maybe publish a covariance as well?
 
         # self.control_inpt = None
-        # self.estimate = None
-        # self.uncertainty = None
-        # self.last_update_time = None
         # self.motion_noise = np.array([[0.2,0,0,0,0,0],\
         #                               [0,0.2,0,0,0,0],\
         #                               [0,0,0.1,0,0,0],\
@@ -39,13 +46,9 @@ class EKF():
         #                               [0,0,0,0,0,0.01]])
         # self.meas_noise = np.eye(5) * np.array([[1,1,0.1,0.1,0.01]]).T # broadcast
         # print(self.meas_noise)
-        # self.last_control_time = rospy.get_time()
-        self.control_queue = []
-        self.meas_queue = []
-        self.lock = threading.Lock()
 
     def control_callback(self, msg):
-        self.lock.acquire()
+        self.lock.acquire(True)
         self.last_control_time = rospy.get_time()
         s = msg.linear.x
         theta_dot = msg.angular.z
@@ -54,11 +57,63 @@ class EKF():
 
     def run_filter(self):
         self.lock.acquire(True)
-        if not self.control_queue:
-            pass
+
+        """ Prediction Step """
+        if self.mean.size == 0:
+            self.mean = np.array([self.meas_queue]).T
+            print(self.mean)
+            self.last_update_time = rospy.get_time()
+            self.lock.release()
+            return
+
+        # Turtle stops moving 1s after last control input,
+        # ... check if it's been a sec and set input to 0's
+        if self.control_queue == [0,0]: # Only on startup & after 1s of no control input
+            self.control_queue = [0,0]
         else:
-            print("Emptying control queue")
-            self.control_queue = []
+            if rospy.get_time() - self.last_control_time >= 1.0:
+                print("Emptying control queue")
+                self.control_queue = [0,0] # empty the queue
+        
+        # Calculate delta_t & set new update time
+        now = rospy.get_time()
+        dt = now - self.last_update_time
+        self.last_update_time = now
+
+        s = self.control_queue[0]
+        theta_dot = self.control_queue[1]
+        x_initial = float(self.mean[0])
+        y_initial = float(self.mean[1])
+        theta_initial = float(self.mean[2])
+
+        # Runge-Kutta integrate mean prediction
+        def dynamics(t, z):
+            _x_dot = s * np.cos(z[2])
+            _y_dot = s * np.sin(z[2])
+            _theta_dot = theta_dot
+            return np.array([_x_dot, _y_dot, _theta_dot])
+
+        t_init, t_final = 0, dt
+        z_init = np.array([x_initial, y_initial, theta_initial])
+        r = integrate.RK45(dynamics, t_init, z_init, t_final)
+        while r.status == "running":
+            status = r.step()
+        mean_bar = np.reshape(r.y, (r.y.size, 1))
+        
+        # Euler Intergrate the covariance
+        # Jacobian of motion model, use Euler Integration (Runge-kutta for mean estimate)
+        G = np.array([[1, 0, -dt*s*np.sin(theta_initial)],\
+                      [0, 1, dt*s*np.cos(theta_initial)],\
+                      [0, 0, 1]])
+        print(G)
+        sigma_bar = np.dot( np.dot(G, self.sigma), G.T)
+
+        print(mean_bar)
+        print(sigma_bar)
+        print("------------------")
+        self.mean = mean_bar
+        self.sigma = sigma_bar
+            
         if not self.meas_queue:
             pass
         else:
@@ -166,7 +221,7 @@ class EKF():
         #     print("---")
 
     def meas_callback(self, msg):
-        self.lock.acquire()
+        self.lock.acquire(True)
         self.meas_queue = msg.data
         self.lock.release()
 
