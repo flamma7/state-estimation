@@ -12,6 +12,7 @@ x0, x1 = 0, 5
 y0 = np.array([0])
 
 r = integrate.RK45(diff_eq, x0, y0, x1)
+# r = integrate.RK45(lambda x,y : np.array([x]), x0, y0, x1) # w/ lambda
 while r.status == "running":
     status = r.step()
 print(r.y)
