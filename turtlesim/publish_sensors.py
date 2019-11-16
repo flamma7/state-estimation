@@ -7,6 +7,7 @@ import rospy
 from turtlesim.msg import Pose
 from std_msgs.msg import Float32MultiArray
 import numpy as np
+import threading
 
 def pose_callback_gps(msg):
     fma = Float32MultiArray()
@@ -15,16 +16,16 @@ def pose_callback_gps(msg):
     pub_gps.publish(fma)
 
 def pose_callback_all(msg):
-    locked = True
+    lock.acquire(True)
     fma.data = []
     fma.data.append(msg.x + np.random.normal(0,1))
     fma.data.append(msg.y + np.random.normal(0,1))
     fma.data.append(msg.theta + np.random.normal(0,0.1))
-    fma.data.append(msg.linear_velocity + np.random.normal(0,0.1))
-    fma.data.append(msg.angular_velocity + np.random.normal(0,0.01))
-    locked = False
+    # fma.data.append(msg.linear_velocity + np.random.normal(0,0.1))
+    # fma.data.append(msg.angular_velocity + np.random.normal(0,0.01))
+    lock.release()
 
-locked = False
+lock = threading.Lock()
 fma = Float32MultiArray()
 rospy.init_node("sensors")
 pub_gps = rospy.Publisher("/turtle1/gps", Float32MultiArray, queue_size=10)
@@ -36,7 +37,7 @@ rospy.sleep(2)
 
 r = rospy.Rate(2) # 2hz
 while not rospy.is_shutdown():
-    while locked:
-        time.sleep(0.1)
+    lock.acquire(True)
     pub_all.publish(fma)
+    lock.release()
     r.sleep()
