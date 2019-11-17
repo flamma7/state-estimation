@@ -34,7 +34,8 @@ class EKF():
         print("...waiting for first measurement")
         rospy.wait_for_message("/turtle1/meas", Float32MultiArray)
         rospy.Subscriber("/turtle1/cmd_vel", Twist, self.control_callback)
-        self.pub = rospy.Publisher("/turtle1/kf_estimate", Float32MultiArray, queue_size=10) # TODO maybe publish a covariance as well?
+        self.mean_pub = rospy.Publisher("/turtle1/ekf_mean", Float32MultiArray, queue_size=10)
+        self.cov_pub = rospy.Publisher("/turtle1/ekf_cov", Float32MultiArray, queue_size=10)
 
         self.motion_noise = np.eye(3) * np.array([[1,1,0.1]]).T
         self.meas_noise = np.array([[1,0,0],[0,1,0],[0,0,0.1]])
@@ -128,111 +129,23 @@ class EKF():
         print(self.mean)
         print(self.sigma)
         print("--------")
-        self.lock.release()
-        # Check if control input
-        # if not self.control_queue: # no control input
-        #     pass
-        # else:
-        #     [u_s, u_theta_dot] = self.control_queue
-        #     # do something...
-        # if not self.meas_queue:
-        #     pass
-        # else:
-            # do stuff
-            
+        self.pub_estimates(self.mean, self.sigma)
         
-        # Check if measurement
-
-        # if self.last_update_time == None: # initialize with first measurement
-        #     x = msg.data[0]
-        #     y = msg.data[1]
-        #     theta = msg.data[THETA_INDEX]
-        #     x_dot = msg.data[SPEED_INDEX] * np.cos(msg.data[THETA_INDEX])
-        #     y_dot = msg.data[SPEED_INDEX] * np.sin(msg.data[THETA_INDEX])
-        #     theta_dot = msg.data[THETA_DOT_INDEX]
-        #     self.estimate = np.array([[x, y, theta, x_dot, y_dot, theta_dot]]).T # x, y, theta, x_dot, y_dot, theta_dot
-        #     self.uncertainty = np.eye(6) * 100
-        #     self.last_update_time = rospy.get_time()
-        #     print("Initialized ekf with first meas")
-        # else:
-        #     z = np.array([[msg.data[0]],\
-        #                   [msg.data[1]],\
-        #                   [msg.data[2]],\
-        #                   [msg.data[3]],\
-        #                   [msg.data[4]]])
-        #     time = rospy.get_time()
-        #     dt = time - self.last_update_time
-        #     self.last_update_time = time
-        #     G = np.array([[1,0,0,dt,0,0], \
-        #                   [0,1,0,0,dt,0],\
-        #                   [0,0,1,0,0,dt],\
-        #                   [0,0,0,1,0,0],\
-        #                   [0,0,0,0,1,0],\
-        #                   [0,0,0,0,0,1]]) # No nonlinearities here..., all our nonlinearity is in the update step
-
-        #     # Prediction
-        #     mu_bar = np.dot(G, self.estimate) # linear dynamics
-        #     sigma_bar = np.dot(np.dot(G, self.uncertainty), G.T)
-        #     # self.debug_prediction(G, self.estimate, self.uncertainty, mu_bar, sigma_bar)
-
-        #     # Extract Relevant prediction data
-        #     x = float(mu_bar[0])
-        #     y = float(mu_bar[1])
-        #     theta = float(mu_bar[2])
-        #     x_dot = float(mu_bar[3])
-        #     y_dot = float(mu_bar[4])
-        #     theta_dot = float(mu_bar[5])
-
-        #     if abs(theta- np.pi/2) < 0.1: # theta = pi/2
-        #         print("theta near pi/2")
-        #         alpha = 1 / np.sin(theta)
-        #         beta = -y_dot * (1 / np.sin(theta)) * (1/np.tan(theta))
-        #         H = np.array([[1,0,0,0,0,0],\
-        #                   [0,1,0,0,0,0],\
-        #                   [0,0,1,0,0,0],\
-        #                   [0,0,beta,0,alpha,0],\
-        #                   [0,0,0,0,0,1]])
-        #         predicted_s = y_dot / np.sin(theta)
-        #         h = np.array([[x],\
-        #                       [y],\
-        #                       [theta],\
-        #                       [predicted_s],\
-        #                       [theta_dot]])
-        #     else:
-        #         print("theta away from pi/2")
-        #         alpha = 1 / np.cos(theta)
-        #         beta = x_dot * (1 / np.cos(theta)) * np.tan(theta)
-        #         H = np.array([[1,0,0,0,0,0],\
-        #                   [0,1,0,0,0,0],\
-        #                   [0,0,1,0,0,0],\
-        #                   [0,0,beta,alpha,0,0],\
-        #                   [0,0,0,0,0,1]])
-        #         predicted_s = x_dot / np.cos(theta)
-        #         h = np.array([[x],\
-        #                       [y],\
-        #                       [theta],\
-        #                       [predicted_s],\
-        #                       [theta_dot]])
-        #     # Correction
-        #     tmp = np.dot(np.dot(H,sigma_bar),H.T) + self.meas_noise
-        #     tmp_inv = np.linalg.inv(tmp)
-        #     sigma_bar_HT_prod = np.dot(sigma_bar,H.T)
-        #     K = np.dot( sigma_bar_HT_prod, tmp_inv)
-        #     innovation = np.subtract(z, h)
-
-        #     tmp2 = np.dot(K, innovation)
-        #     self.estimate = mu_bar + tmp2
-        #     self.uncertainty = np.dot( (np.eye(6) - np.dot(K,H)), sigma_bar)
-        #     # self.debug_correction(H, h, z, mu_bar, sigma_bar, tmp, tmp_inv, sigma_bar_HT_prod,K, innovation, tmp2, self.estimate, self.uncertainty)
-        #     # print(self.estimate)
-        #     diag = np.reshape(np.diagonal(self.uncertainty), (self.uncertainty.shape[0], 1))
-        #     print(diag)
-        #     print("---")
+        self.lock.release()
 
     def meas_callback(self, msg):
         self.lock.acquire(True)
         self.meas_queue = msg.data
         self.lock.release()
+
+    def pub_estimates(self, mean, cov):
+        mean_msg = Float32MultiArray()
+        mean_msg.data = [float(i) for i in mean]
+        self.mean_pub.publish(mean_msg)
+        cov_msg = Float32MultiArray()
+        cov_msg.data = [float(i) for i in cov.flatten()]
+        self.cov_pub.publish(cov_msg)
+
 
     def debug_prediction(self, G, mu_old, sigma_old, mu_bar, sigma_bar):
         print("------------------------------------------------")
