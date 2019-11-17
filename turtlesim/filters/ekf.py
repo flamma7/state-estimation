@@ -13,7 +13,6 @@ import threading
 from scipy import integrate
 
 # steps
-# implement the prediction stuff w/o measurements
 # implement correction step
 # implement nonlinearity with the wall -> sensor input of the actual speed
 
@@ -37,15 +36,8 @@ class EKF():
         rospy.Subscriber("/turtle1/cmd_vel", Twist, self.control_callback)
         self.pub = rospy.Publisher("/turtle1/kf_estimate", Float32MultiArray, queue_size=10) # TODO maybe publish a covariance as well?
 
-        # self.control_inpt = None
-        # self.motion_noise = np.array([[0.2,0,0,0,0,0],\
-        #                               [0,0.2,0,0,0,0],\
-        #                               [0,0,0.1,0,0,0],\
-        #                               [0,0,0,0.05,0,0],\
-        #                               [0,0,0,0,0.05,0],\
-        #                               [0,0,0,0,0,0.01]])
-        # self.meas_noise = np.eye(5) * np.array([[1,1,0.1,0.1,0.01]]).T # broadcast
-        # print(self.meas_noise)
+        self.motion_noise = np.eye(3) * np.array([[1,1,0.1]]).T
+        self.meas_noise = np.array([[1,0,0],[0,1,0],[0,0,0.1]])
 
     def control_callback(self, msg):
         self.lock.acquire(True)
@@ -114,19 +106,28 @@ class EKF():
         G = np.array([[1, 0, -dt*s*np.sin(theta_initial)],\
                       [0, 1, dt*s*np.cos(theta_initial)],\
                       [0, 0, 1]])
-        sigma_bar = np.dot( np.dot(G, self.sigma), G.T)
+        sigma_bar = np.dot( np.dot(G, self.sigma), G.T) + (self.motion_noise * dt)
 
-        print(mean_bar)
-        print(sigma_bar)
-        print("------------------")
-        self.mean = mean_bar
-        self.sigma = sigma_bar
-            
         if not self.meas_queue:
-            pass
+            self.mean = mean_bar
+            self.sigma = sigma_bar
         else:
-            # print("Emptying meas queue")
-            self.meas_queue = []
+            x_meas = self.meas_queue[0]
+            y_meas = self.meas_queue[1]
+            theta_meas = self.meas_queue[2]
+            meas = np.array([[x_meas,y_meas,theta_meas]]).T
+
+            H = np.eye(3)
+            tmp = np.dot(np.dot(H, sigma_bar), H.T) + self.meas_noise
+            tmp_inv = np.linalg.inv(tmp)
+            K = np.dot( np.dot( sigma_bar, H), tmp_inv )
+            inn = meas - mean_bar
+            self.mean = mean_bar + np.dot(K, inn)
+            self.sigma = np.dot( np.eye(3) - np.dot(K,H), sigma_bar)
+            self.meas_queue = [] # empty the queue
+        print(self.mean)
+        print(self.sigma)
+        print("--------")
         self.lock.release()
         # Check if control input
         # if not self.control_queue: # no control input
