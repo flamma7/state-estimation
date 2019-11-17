@@ -54,6 +54,14 @@ class EKF():
         theta_dot = msg.angular.z
         self.control_queue = [s, theta_dot]
         self.lock.release()
+    
+    def normalize_angle(self, angle):
+        """ Normalize the angle from -pi to pi """
+        while angle <= np.pi:
+            angle += 2*np.pi
+        while angle >= np.pi:
+            angle -= 2*np.pi
+        return angle
 
     def run_filter(self):
         self.lock.acquire(True)
@@ -72,7 +80,7 @@ class EKF():
             self.control_queue = [0,0]
         else:
             if rospy.get_time() - self.last_control_time >= 1.0:
-                print("Emptying control queue")
+                # print("Emptying control queue")
                 self.control_queue = [0,0] # empty the queue
         
         # Calculate delta_t & set new update time
@@ -99,13 +107,13 @@ class EKF():
         while r.status == "running":
             status = r.step()
         mean_bar = np.reshape(r.y, (r.y.size, 1))
+        mean_bar[2] = self.normalize_angle(mean_bar[2])
         
         # Euler Intergrate the covariance
         # Jacobian of motion model, use Euler Integration (Runge-kutta for mean estimate)
         G = np.array([[1, 0, -dt*s*np.sin(theta_initial)],\
                       [0, 1, dt*s*np.cos(theta_initial)],\
                       [0, 0, 1]])
-        print(G)
         sigma_bar = np.dot( np.dot(G, self.sigma), G.T)
 
         print(mean_bar)
@@ -117,7 +125,7 @@ class EKF():
         if not self.meas_queue:
             pass
         else:
-            print("Emptying meas queue")
+            # print("Emptying meas queue")
             self.meas_queue = []
         self.lock.release()
         # Check if control input
