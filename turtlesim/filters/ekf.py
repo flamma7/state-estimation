@@ -37,8 +37,8 @@ class EKF():
         self.mean_pub = rospy.Publisher("/turtle1/ekf_mean", Float32MultiArray, queue_size=10)
         self.cov_pub = rospy.Publisher("/turtle1/ekf_cov", Float32MultiArray, queue_size=10)
 
-        self.motion_noise = np.eye(3) * np.array([[1,1,0.1]]).T
-        self.meas_noise = np.array([[1,0,0],[0,1,0],[0,0,0.1]])
+        self.motion_noise = np.eye(3) * np.array([[0.05,0.05,0.01]]).T
+        self.meas_noise = np.array([[1,0,0],[0,1,0],[0,0,0.25]])
 
     def control_callback(self, msg):
         self.lock.acquire(True)
